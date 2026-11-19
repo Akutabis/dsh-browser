@@ -26,6 +26,7 @@ export interface Config {
     readonly viewHost?: ElectronBrowserViewHost;
     /** Allow navigation only to HTTP(S) URLs. Default true. */
     readonly httpOnly?: boolean;
+    readonly localDshAutoLogin?: boolean;
     /**
      * Directory `dsh_browser_download` save paths must resolve inside (prevents a
      * prompt-injected agent from writing arbitrary machine paths). Default:

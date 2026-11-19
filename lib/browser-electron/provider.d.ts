@@ -282,6 +282,7 @@ export interface ElectronViewHandle {
      * @param cookies - the cookies to write.
      * @returns how many were accepted.
      */
+    installLocalDshGrant?(grant: import('./local-dsh-auth.js').LocalDshGrant): Promise<void>;
     restoreAuth?(cookies: readonly ExportedCookie[]): Promise<number>;
     /**
      * Capture this view natively, returning the image and its measured size.
@@ -301,6 +302,7 @@ export interface ElectronViewHandle {
 }
 /** Provider config: navigation admission defaults and snapshot caps. */
 export interface ElectronBrowserProviderConfig {
+    readonly localDshGrant?: (url: string, signal?: AbortSignal) => Promise<import('./local-dsh-auth.js').LocalDshGrant | undefined>;
     /** Allow navigation only to HTTP(S) URLs; reject anything else. Default true. */
     readonly httpOnly?: boolean;
     /**
@@ -499,6 +501,7 @@ export declare class ElectronBrowserProvider implements BrowserProvider {
     private readonly historyStore;
     /** Live settings source; absent when nothing owns a settings document. */
     private readonly settingsSource;
+    private readonly acquireLocalDshGrant;
     constructor(host: ElectronBrowserViewHost, config?: ElectronBrowserProviderConfig);
     /**
      * Usable when the host says it can back views (the self-hosted host probes
@@ -550,7 +553,7 @@ export declare class ElectronBrowserProvider implements BrowserProvider {
     /** Navigate the active tab's view to a URL, honoring HTTP(S)-only admission. */
     navigate(session: BrowserSessionId, request: {
         readonly url: string;
-    }, signal?: AbortSignal): Promise<void>;
+    }, signal?: AbortSignal, allowLocalDshAuth?: boolean): Promise<void>;
     /**
      * A per-document stamp: `performance.timeOrigin` is unique per document load,
      * so it tells a same-URL reload and an A→B→A redirect apart from the document

@@ -40,6 +40,16 @@ Start DSH Desktop after installation. On Windows, `desktop-bridge/install-and-st
 
 > **The bridge is optional**: without it, the plugin uses a standalone window. **Reinstall the bridge with the new script after plugin or desktop shell upgrades** — a desktop update restores `app.asar`, the bridge goes stale, and `bridge-status` reports `stale`. The state is visible at the top of the panel. See [carrier limitations](docs/limitations.md) (Chinese).
 
+### Local Desktop sign-in (local build)
+
+This build opts in to `browser-electron.config.localDshAutoLogin`. In the standalone
+`dsh-browser` Electron window, open the current DSH's clean HTTP loopback root in a
+new task. It signs in with owner permissions for that view. Enable this only in a
+private Desktop profile where every task allowed to use the browser is trusted with
+that access. No launch URL is sent through an agent tool. This is not supported in
+Chrome, Edge or the Desktop sidebar.
+Set the option to `false` to disable automatic sign-in on future navigations.
+
 ### Web (`dsh web`)
 
 ```sh

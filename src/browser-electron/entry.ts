@@ -31,6 +31,7 @@ import { detectBrowser, searchSummary, SystemBrowserViewHost } from './system-br
 import { claimEphemeralProfile, ephemeralProfileName, sweepAbandonedEphemeralProfiles } from './ephemeral-profile.js'
 import { MissingSystemBrowserHost } from './missing-system-browser.js'
 import { SettingsStore, settingsPath } from './settings-store.js'
+import { localDshGrant } from './local-dsh-auth.js'
 import { sameOrigin } from './settings-route.js'
 import { authenticatedRoute, isDirectLoopback, type BrowserConnection, type BrowserHttpHandler } from './authenticated-route.js'
 import { handleBridgeStatus, handlePreviewFrame, handlePreviewSessions, BRIDGE_STATUS_ROUTE, PREVIEW_ROUTE, PREVIEW_SESSIONS_ROUTE } from './preview-route.js'
@@ -65,6 +66,7 @@ export interface Config {
   readonly viewHost?: ElectronBrowserViewHost
   /** Allow navigation only to HTTP(S) URLs. Default true. */
   readonly httpOnly?: boolean
+  readonly localDshAutoLogin?: boolean
   /**
    * Directory `dsh_browser_download` save paths must resolve inside (prevents a
    * prompt-injected agent from writing arbitrary machine paths). Default:
@@ -81,6 +83,7 @@ export const Config: z<Config> = z.object({
   // Absent on surfaces without a desktop shell; the plugin self-hosts then.
   viewHost: z.any(),
   httpOnly: z.boolean().default(true),
+  localDshAutoLogin: z.boolean().default(false),
   downloadDir: z.string(),
   snapshotMaxElements: z.number(),
   contentMaxChars: z.number(),
@@ -141,6 +144,12 @@ export function apply(ctx: Context & { browser: BrowserRuntime }, config: Config
     snapshotMaxElements: config.snapshotMaxElements,
     contentMaxChars: config.contentMaxChars,
     settings: () => settings.get(),
+    ...(config.localDshAutoLogin === true ? {
+      localDshGrant: (url: string, signal?: AbortSignal) => {
+        const host = ctx as unknown as { get(name: 'webServer'): { getOrigin(): string } | undefined; get(name: 'connection'): { authenticatedUrl(base: string): string } | undefined }
+        return localDshGrant(url, () => host.get('webServer')?.getOrigin(), base => host.get('connection')?.authenticatedUrl(base), signal)
+      },
+    } : {}),
   }
 
   // A host supplied by the composition (the desktop shell's own seam) wins and is

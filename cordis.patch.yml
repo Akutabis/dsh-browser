@@ -37,6 +37,8 @@
       name: dsh-builtin-browser/browser-electron
       config:
         viewHost: !!js ctx.get('electronViewHost')
+        # Local build opt-in. Only the standalone Electron carrier implements it.
+        localDshAutoLogin: true
 
     - id: tool-browser
       name: dsh-builtin-browser/tool-browser

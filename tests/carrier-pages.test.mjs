@@ -57,7 +57,13 @@ test('the self-hosted carrier already routes popups into the model, url included
   const block = handler.slice(0, handler.indexOf('case ', 10))
   assert.match(block, /this\.newTab\(s\)/, 'a tab is created')
   assert.match(block, /action\.url !== undefined/, 'and the url is honoured, not dropped')
-  assert.match(block, /await this\.navigate\(s\.id, \{ url: action\.url \}\)/, 'by navigating to it')
+  // It navigates with `allowLocalDshAuth = false`: a popup a page asked for is not explicit
+  // tool or address-bar navigation, so it must not be a way to install the local DSH grant.
+  assert.match(
+    block,
+    /await this\.navigate\(s\.id, \{ url: action\.url \}, undefined, false\)/,
+    'by navigating to it, without granting local DSH auth',
+  )
 })
 
 test('carrier pages are merged into the listing under a distinguishable id', () => {

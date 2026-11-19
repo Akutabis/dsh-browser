@@ -369,6 +369,7 @@ export interface ElectronViewHandle {
    * @param cookies - the cookies to write.
    * @returns how many were accepted.
    */
+  installLocalDshGrant?(grant: import('./local-dsh-auth.js').LocalDshGrant): Promise<void>
   restoreAuth?(cookies: readonly ExportedCookie[]): Promise<number>
   /**
    * Capture this view natively, returning the image and its measured size.
@@ -414,6 +415,7 @@ interface Session {
 
 /** Provider config: navigation admission defaults and snapshot caps. */
 export interface ElectronBrowserProviderConfig {
+  readonly localDshGrant?: (url: string, signal?: AbortSignal) => Promise<import('./local-dsh-auth.js').LocalDshGrant | undefined>
   /** Allow navigation only to HTTP(S) URLs; reject anything else. Default true. */
   readonly httpOnly?: boolean
   /**
@@ -803,6 +805,7 @@ export class ElectronBrowserProvider implements BrowserProvider {
   private readonly historyStore: HistoryStore | undefined
   /** Live settings source; absent when nothing owns a settings document. */
   private readonly settingsSource: (() => BrowserSettings) | undefined
+  private readonly acquireLocalDshGrant: ElectronBrowserProviderConfig['localDshGrant']
 
   constructor(
     private readonly host: ElectronBrowserViewHost,
@@ -818,6 +821,7 @@ export class ElectronBrowserProvider implements BrowserProvider {
     // Chinese desktop (`~/下载`) works without configuring `downloadDir`.
     this.downloadDir = config.downloadDir ?? defaultDownloadDir()
     this.settingsSource = config.settings
+    this.acquireLocalDshGrant = config.localDshGrant
     // Browsing history follows the browser profile's persistence rules (close
     // the interface, lose nothing), and can be switched off from settings.
     this.historyStore = config.history?.enabled === false
@@ -1083,7 +1087,7 @@ export class ElectronBrowserProvider implements BrowserProvider {
   }
 
   /** Navigate the active tab's view to a URL, honoring HTTP(S)-only admission. */
-  async navigate(session: BrowserSessionId, request: { readonly url: string }, signal?: AbortSignal): Promise<void> {
+  async navigate(session: BrowserSessionId, request: { readonly url: string }, signal?: AbortSignal, allowLocalDshAuth = true): Promise<void> {
     const s = this.session(session)
     const tab = this.activeTab(s)
     const { handle } = tab
@@ -1107,6 +1111,14 @@ export class ElectronBrowserProvider implements BrowserProvider {
       const timeoutMs = 30_000
       // Document identity of the page we are leaving (see settleDocument).
       const before = await this.documentStamp(handle)
+      if (allowLocalDshAuth && handle.installLocalDshGrant && this.acquireLocalDshGrant) {
+        const grant = await this.acquireLocalDshGrant(url, signal)
+        if (grant) {
+          try { await handle.installLocalDshGrant(grant) }
+          catch { throw new Error('browser: could not activate local DSH sign-in in this view') }
+        }
+      }
+      signal?.throwIfAborted()
       const result = await withTimeout(
         handle.sendCommand(CDP_PAGE_NAVIGATE, { url } satisfies CdpNavigateParams),
         timeoutMs,
@@ -3822,7 +3834,8 @@ export class ElectronBrowserProvider implements BrowserProvider {
         case 'newTab':
           this.newTab(s)
           if (action.url !== undefined && action.url !== '') {
-            await this.navigate(s.id, { url: action.url })
+            // A popup requested by a page is not explicit tool/address-bar navigation.
+            await this.navigate(s.id, { url: action.url }, undefined, false)
           }
           return
         case 'activateTab': {

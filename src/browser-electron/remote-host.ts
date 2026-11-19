@@ -794,6 +794,10 @@ class RemoteView implements ElectronViewHandle {
     return this.client.call<{ base64: string; mime: string }>('capture', { viewId: this.id, ...opts ?? {} })
   }
 
+  installLocalDshGrant(grant: import('./local-dsh-auth.js').LocalDshGrant): Promise<void> {
+    return this.client.call<void>('installLocalDshGrant', { viewId: this.id, grant })
+  }
+
   /** Export the session's cookies (login state). */
   flushAuth(): Promise<ExportedCookie[]> {
     return this.client.call<{ cookies: ExportedCookie[] }>('flushAuth', { viewId: this.id }).then(r => r.cookies)
@@ -1384,6 +1388,10 @@ class DeferredRemoteView implements ElectronViewHandle {
 
   async flushAuth(): Promise<ExportedCookie[]> {
     return this.withRecovery(view => view.flushAuth())
+  }
+
+  async installLocalDshGrant(grant: import('./local-dsh-auth.js').LocalDshGrant): Promise<void> {
+    await this.withRecovery(view => view.installLocalDshGrant(grant))
   }
 
   async restoreAuth(cookies: ExportedCookie[]): Promise<number> {

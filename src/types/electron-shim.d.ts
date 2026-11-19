@@ -36,6 +36,14 @@ declare module 'electron' {
     expirationDate?: number
   }
   export interface Session {
+    readonly webRequest: {
+      onBeforeSendHeaders(listener: (details: {
+        readonly webContentsId?: number
+        readonly url: string
+        readonly resourceType: string
+        readonly requestHeaders: Record<string, string>
+      }, callback: (response: { requestHeaders: Record<string, string | string[]> }) => void) => void): void
+    }
     once(event: 'will-download', listener: (event: Event, item: DownloadItem) => void): void
     readonly cookies: {
       get(filter: Record<string, unknown>): Promise<Cookie[]>
@@ -62,6 +70,7 @@ declare module 'electron' {
     setWindowOpenHandler(handler: (details: { url: string }) => { action: 'deny' } | { action: 'allow' }): void
     getTitle(): string
     getURL(): string
+    once(event: 'destroyed', listener: () => void): this
     on(event: 'ipc-message', listener: (event: unknown, channel: string, ...args: unknown[]) => void): this
     // Windows keyboard focus routing: clicks reach any view, but keyboard
     // events go only to the focused webContents (electron#28163). `input` is

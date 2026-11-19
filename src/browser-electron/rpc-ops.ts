@@ -32,6 +32,7 @@ export const RPC_OPS = [
   'forward',
   'reload',
   'userActionError',
+  'installLocalDshGrant',
 ] as const
 
 /** Notifications the child sends the parent, which carry no reply. */

@@ -24,12 +24,13 @@
  * @module dsh-browser/browser-electron/host-main
  */
 
-import { app, BrowserWindow, WebContentsView } from 'electron'
+import { app, BrowserWindow, WebContentsView, type Session } from 'electron'
 import { createInterface } from 'node:readline'
 import { createConnection } from 'node:net'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { writeFileNoReplace } from './file-write.js'
 import { electronRuntimeDiagnosticLines } from './runtime-diagnostics.js'
+import { isLocalDshGrant, localDshHeaders, type LocalDshGrant } from './local-dsh-auth.js'
 import { createRpcLineReader } from './rpc-input.js'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -156,6 +157,9 @@ const windows = new Map<string, HostWindow>()
 const assignments = new Map<string, { windowId: string; label?: string }>()
 
 /** The RPC socket to the parent; set when the connection is established. */
+const localDshGrants = new Map<number, LocalDshGrant>()
+const grantListeners = new WeakSet<Session>()
+
 let rpcSocket: import('node:net').Socket | undefined
 
 // ---------------------------------------------------------------------------
@@ -660,7 +664,7 @@ function scheduleWindowClose(win: HostWindow): void {
 }
 
 /** Handle one command. */
-async function handle(op: string, msg: { id: number; viewId?: string; windowId?: string; method?: string; params?: Record<string, unknown>; url?: string; savePath?: string; cookies?: unknown[]; label?: string; format?: string; quality?: number; maxWidth?: number; maxHeight?: number; message?: string; quiet?: boolean; needSurface?: boolean }): Promise<void> {
+async function handle(op: string, msg: { id: number; grant?: unknown; viewId?: string; windowId?: string; method?: string; params?: Record<string, unknown>; url?: string; savePath?: string; cookies?: unknown[]; label?: string; format?: string; quality?: number; maxWidth?: number; maxHeight?: number; message?: string; quiet?: boolean; needSurface?: boolean }): Promise<void> {
   try {
     switch (op) {
       case 'ping':
@@ -724,7 +728,12 @@ async function handle(op: string, msg: { id: number; viewId?: string; windowId?:
         // Keep the window title and the toolbar tab strip live as the page
         // changes (navigations, title updates).
         view.webContents.on('page-title-updated', () => { updateWindowTitle(win, viewId, undefined); syncToolbar(win) })
+        const contentsId = view.webContents.id
+        view.webContents.once('destroyed', () => { localDshGrants.delete(contentsId) })
         view.webContents.on('did-navigate', () => {
+          const id = view.webContents.id
+          const grant = localDshGrants.get(id)
+          if (grant !== undefined && !view.webContents.getURL().startsWith(`${grant.origin}/`)) localDshGrants.delete(id)
           // The renderer process was just replaced: mark the view so the next
           // show forces a fresh display surface (see showViewInWindow).
           const current = win.views.get(viewId)
@@ -794,6 +803,22 @@ async function handle(op: string, msg: { id: number; viewId?: string; windowId?:
         if (win !== undefined) {
           try { win.toolbarView?.webContents.send('user-action-error', message) } catch { /* toolbar not loaded */ }
         }
+        reply(msg.id, { ok: true })
+        return
+      }
+      case 'installLocalDshGrant': {
+        const view = msg.viewId === undefined ? undefined : windowOfView(msg.viewId)?.views.get(msg.viewId)?.webContentsView.webContents
+        if (view === undefined || !isLocalDshGrant(msg.grant)) throw new Error('invalid local DSH grant')
+        const owner = view.session
+        if (!grantListeners.has(owner)) {
+          owner.webRequest.onBeforeSendHeaders((details, callback) => {
+            const grant = details.webContentsId === undefined ? undefined : localDshGrants.get(details.webContentsId)
+            callback({ requestHeaders: localDshHeaders(grant, details.url, details.resourceType, details.requestHeaders) })
+          })
+          grantListeners.add(owner)
+        }
+        const id = view.id
+        localDshGrants.set(id, msg.grant)
         reply(msg.id, { ok: true })
         return
       }
